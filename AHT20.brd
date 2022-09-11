@@ -207,7 +207,7 @@
 <text x="14.097" y="0.889" size="1.016" layer="21" font="vector" ratio="14" align="center">SCL</text>
 <text x="16.637" y="4.191" size="1.016" layer="21" font="vector" ratio="14" align="center">SDA</text>
 <text x="12.7" y="16.51" size="1.778" layer="172" ratio="15" align="center">AHT20</text>
-<text x="14.351" y="14.605" size="1.143" layer="172" font="vector" ratio="15" align="center">Temp &amp; Humidity</text>
+<text x="14.351" y="14.605" size="1.143" layer="172" ratio="15" align="center">Temp &amp; Humidity</text>
 <dimension x1="12.7" y1="2.54" x2="12.7" y2="15.24" x3="29.337" y3="8.89" textsize="1.778" layer="47" dtype="vertical" unit="inch"/>
 <dimension x1="22.86" y1="2.54" x2="2.54" y2="2.54" x3="12.7" y3="-3.302" textsize="1.778" layer="47" dtype="horizontal" unit="inch"/>
 <dimension x1="25.4" y1="9.144" x2="0" y2="6.223" x3="12.7" y3="-6.223" textsize="1.778" layer="47" dtype="horizontal" unit="inch"/>

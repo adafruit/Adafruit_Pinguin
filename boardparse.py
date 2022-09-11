@@ -7,7 +7,9 @@ import xml.etree.ElementTree as ET
 from PIL import Image, ImageFont, ImageDraw
 
 DPI = 1200
-FONT_FILE = "fonts/FreeSans.ttf"
+FONT_FILE = "Arimo/static/Arimo-Regular.ttf"
+FONT_FEATURES=["-kern"]
+FONT_FEATURES=None
 
 # EAGLE layers we'll use for input and output
 TOP_OUT = 170  #    Top silk output (will be added if not present)
@@ -43,7 +45,10 @@ def layer_find_add(parent, list, number, name, color):
 
 
 top_out = layer_find_add(layers, layer_list, TOP_OUT, "Pinguin_tPlace", 14)
-# delete any children of out layers
+# delete any children of out layers, something like:
+#for child in list(e):
+#    e.remove(child)
+
 bottom_out = layer_find_add(layers, layer_list, BOTTOM_OUT, "Pinguin_bPlace", 13)
 top_in = layer_find_add(layers, layer_list, TOP_IN, "Pinguin_tIn", 10)
 bottom_in = layer_find_add(layers, layer_list, BOTTOM_IN, "Pinguin_bIn", 1)
@@ -68,6 +73,7 @@ def rect(parent, x1, x2, y, ax=0, ay=0, xx=0, yy=0):
     child = ET.SubElement(parent, "rectangle", x1="%3.2f" % (xx + x1), y1="%3.2f" % (yy - y), x2="%3.2f" % (xx + x2), y2="%3.2f" % (yy - y2), layer=str(TOP_OUT))
 
 
+
 def process(texts, in_layer, plain, out_layer):
     in_str = str(in_layer)
     out_str = str(out_layer)
@@ -75,16 +81,22 @@ def process(texts, in_layer, plain, out_layer):
         if t.get("layer") == in_str:
             # Found a text object on the input layer
             # Rasterize and place it in the output layer
-            font = ImageFont.truetype(FONT_FILE, int(float(t.get("size")) * 64))
-            box = font.getbbox(t.text, mode='', direction=None, features=None,
+            #font = ImageFont.truetype(FONT_FILE, int(float(t.get("size")) * 66.6))
+            #font = ImageFont.truetype(FONT_FILE, 1 + int(float(t.get("size")) * 65))
+            #font = ImageFont.truetype(FONT_FILE, int(float(t.get("size")) * 66 + 0.5))
+            font = ImageFont.truetype(FONT_FILE, int(float(t.get("size")) * 66.6))
+            metrics = font.getmetrics()
+            box = font.getbbox(t.text, mode='', direction=None, features=FONT_FEATURES,
               language=None, stroke_width=0, anchor=None)
             width = box[2] - box[0] + 1
             height = box[3] - box[1] + 1
             image = Image.new('1', (width, height), color=0)
             draw = ImageDraw.Draw(image)
-            draw.text((-box[0], -box[1]), t.text, font=font, fill=1)
+            draw.text((-box[0], -box[1]), t.text, font=font, fill=1, features=FONT_FEATURES)
             ax = width / 2  # TO DO: anchor alignment
-            ay = height / 2
+            #ay = height / 2
+            #ay = float(t.get("size")) * 24
+            ay = (metrics[0] - metrics[1]) * 0.5
             xx = float(t.get("x"))
             yy = float(t.get("y"))
             for y in range(height):
