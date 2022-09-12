@@ -205,7 +205,7 @@
         <text align="center" font="vector" layer="172" ratio="14" size="1.016" x="11.43" y="4.191">GND</text>
         <text align="center" font="vector" layer="21" ratio="14" size="1.016" x="14.097" y="0.889">SCL</text>
         <text align="center" font="vector" layer="21" ratio="14" size="1.016" x="16.637" y="4.191">SDA</text>
-        <text align="center" layer="172" ratio="15" size="1.778" x="12.7" y="16.51">AHT20</text>
+        <text align="center" layer="172" ratio="15" rot="R12" size="1.778" x="12.7" y="16.51">AHT20</text>
         <text align="center" layer="172" ratio="15" size="1.143" x="14.351" y="14.605">Temp &amp; Humidity</text>
         <dimension dtype="vertical" layer="47" textsize="1.778" unit="inch" x1="12.7" x2="12.7" x3="29.337" y1="2.54" y2="15.24" y3="8.89"/>
         <dimension dtype="horizontal" layer="47" textsize="1.778" unit="inch" x1="22.86" x2="2.54" x3="12.7" y1="2.54" y2="2.54" y3="-3.302"/>
@@ -5116,7 +5116,7 @@ einem neuen Namen ab.</description>
           <attribute font="vector" layer="27" name="VALUE" ratio="10" rot="R270" size="1.016" x="7.874" y="10.033"/>
         </element>
         <element library="pinguin" name="pLabel0" package="pLabel0" rot="R0" smashed="yes" x="11.43" y="4.191"/>
-        <element library="pinguin" name="pLabel1" package="pLabel1" rot="R0" smashed="yes" x="12.7" y="16.51"/>
+        <element library="pinguin" name="pLabel1" package="pLabel1" rot="R12" smashed="yes" x="12.7" y="16.51"/>
         <element library="pinguin" name="pLabel2" package="pLabel2" rot="R0" smashed="yes" x="14.351" y="14.605"/>
       </elements>
       <signals>

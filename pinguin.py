@@ -127,32 +127,31 @@ brd_root = brd_tree.getroot()
 brd_layers = brd_root.findall("drawing/layers")[0]  # <layers> in .brd
 layer_list = brd_layers.findall("layer")  #           List of <layer> elements
 
-top_out = layer_find_add(brd_layers, layer_list, TOP_OUT, "Pinguin_tPlace", 14)
+# If Pinguin_tPlace and/or Pinguin_bPlace layers are present in .brd,
+# delete them (we'll make new ones in a moment). It's easier than
+# conditionally adding them and iterating through to delete contents.
+layer_names = [str(TOP_OUT), str(BOTTOM_OUT)]
+for layer in layer_list:
+    if layer.get("number") in layer_names:
+        brd_layers.remove(layer)
+
+# Rather than find/add - just delete any such list that's there
+# Do this for Pinguin_tPlace and Pinguin_bPlace
+
+top_out = ET.SubElement(brd_layers, "layer", number=str(TOP_OUT), name="Pinguin_tPlace", color=str(14), fill="1", visible="yes", active="yes")
+bottom_out = ET.SubElement(brd_layers, "layer", number=str(BOTTOM_OUT), name="Pinguin_bPlace", color=str(13), fill="1", visible="yes", active="yes")
+
+# OR - delete list, then add
+#top_out = layer_find_add(brd_layers, layer_list, TOP_OUT, "Pinguin_tPlace", 14)
 # delete any children of out layers, something like:
 #for child in list(e):
 #    e.remove(child)
-bottom_out = layer_find_add(brd_layers, layer_list, BOTTOM_OUT, "Pinguin_bPlace", 13)
+#bottom_out = layer_find_add(brd_layers, layer_list, BOTTOM_OUT, "Pinguin_bPlace", 13)
 top_in = layer_find_add(brd_layers, layer_list, TOP_IN, "Pinguin_tIn", 10)
 bottom_in = layer_find_add(brd_layers, layer_list, BOTTOM_IN, "Pinguin_bIn", 1)
 
-# Create .lbr tree and initial hierarchy
-
-lib_top = ET.Element("eagle", version="6.00")
-lib_drawing = ET.SubElement(lib_top, "drawing")
-ET.SubElement(lib_drawing, "settings")
-ET.SubElement(lib_drawing, "grid", distance="1", unitdist="mm",
-              unit="mm", style="lines", multiple="1", display="no",
-              altdistance="0.1", altunitdist="mm", altunit="mm")
-lib_layers = ET.SubElement(lib_drawing, "layers")
-ET.SubElement(lib_layers, "layer", number=str(TOP_OUT), name="Pinguin_tPlace", color="14",
-              fill="1", visible="yes", active="yes")
-ET.SubElement(lib_layers, "layer", number=str(BOTTOM_OUT), name="Pinguin_bPlace", color="13",
-              fill="1", visible="yes", active="yes")
-# In fact - check if things like settings, grid even matter in library
-library = ET.SubElement(lib_drawing, "library")
-lib_packages = ET.SubElement(library, "packages")
-lib_symbols = ET.SubElement(library, "symbols")
-lib_devicesets = ET.SubElement(library, "devicesets")
+# Sort .brd layers list so Pinguin-added items aren't at end in EAGLE menu
+brd_layers[:] = sorted(brd_layers, key=lambda child: int(child.get("number")))
 
 
 # Get list of text objects in the .brd file
@@ -163,6 +162,11 @@ brd_plain = brd_root.findall("drawing/board/plain")[0]
 brd_texts = brd_plain.findall("text")
 # Need to do some check-if-exist stuff here
 brd_libraries = brd_root.findall("drawing/board/libraries")[0]  # <libraries> in .brd
+brd_library_list = brd_libraries.findall("library")  #            List of <library> items
+for lib in brd_library_list:  #                                   Iterate through list
+    if lib.get("name") == "pinguin":  #                           If pinguin library
+        brd_libraries.remove(lib)  #                              Delete it, we'll make a new one
+
 brd_library = ET.SubElement(brd_libraries, "library", name="pinguin")
 brd_packages = ET.SubElement(brd_library, "packages")
 
@@ -179,45 +183,19 @@ process(brd_texts, BOTTOM_IN, brd_elements, brd_packages, BOTTOM_OUT)
 
 
 
-# Sort .brd layers list so Pinguin-added items aren't at end in EAGLE menu
-brd_layers[:] = sorted(brd_layers, key=lambda child: int(child.get("number")))
 
-lib_tree = ET.ElementTree(lib_top)
 
 # Unfortunately indent() is only avail in Python 3.9; we're on 3.7
 # ET.indent(tree, space=" ")
 # That means the resulting XML will all be packed into one long line.
 brd_tree.write("AHT20_out.brd.tmp", encoding="utf-8", xml_declaration=True)
-lib_tree.write("pinguin.lbr.tmp", encoding="utf-8", xml_declaration=True)
 # So, instead of indent(), reformat to legible XML using command line tool...
 os.system("xmllint --format - < AHT20_out.brd.tmp > AHT20_out.brd")
-os.system("xmllint --format - < pinguin.lbr.tmp > pinguin.lbr")
 os.remove("AHT20_out.brd.tmp")
-os.remove("pinguin.lbr.tmp")
+
 
 
 # ------------------------------
-
-
-# TO DO: create packages/symbols/etc. from text elements in .brd
-
-# Don't worry about naming the packages anything meaningful,
-# they can just be "label1", "label2", etc.
-
-# Not sure what of these are required in lib (possibly all).
-# Apparently not!
-
-#lib_deviceset = ET.SubElement(lib_devicesets, "deviceset", name="GND")
-#lib_devices = ET.SubElement(lib_deviceset, "devices")
-
-#symbol = ET.SubElement(lib_symbols, "symbol", name="GND")
-#text = ET.SubElement(symbol, "text", size="1.0", layer="94")
-#text.text = "GND"
-
-#gates = ET.SubElement(lib_deviceset, "gates")
-#gate = ET.SubElement(gates, "gate", name="G$1", symbol="GND", x="0", y="0")
-#device = ET.SubElement(lib_devices, "device", name="", package="GND")
-
 
 
 # Default alignment (None) is lower left
@@ -238,10 +216,6 @@ os.remove("pinguin.lbr.tmp")
 #           grouprefs     IDREFS         #IMPLIED
 #           >
 # Ratio is ignored on proportional font
-
-# TO DO: remove existing objects in the output layer
-# parent.remove(child)
-
 
 #    # First 4 are required, rest are optional and have defaults if not present
 #    print(
