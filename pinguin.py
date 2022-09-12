@@ -1,95 +1,266 @@
-# Ugly test code, this tries generating an EAGLE .lbr file containing
-# rasters for pin labels.
-# At present, just generates one, but does appear to work.
+# This reads an EAGLE .brd file and looks for text objects.
+# They're rasterized in a nicer font and placed in a .lbr file,
+# with references to those elements inserted in the .brd.
 
-from PIL import Image, ImageFont, ImageDraw
-import xml.etree.ElementTree as ET
+
+# Referencing a library element in a .brd:
+# <element name="E$1" library="foo2" package="GND" value="" x="6.35" y="10.668" smashed="yes" rot="R45"/>
+# SO - this code might be able to generate a lib, put all labels in that,
+# and just reference elements within (allowing rotation, etc.)
+# At the moment, pinguin.py generates a library (but does not alter a .brd),
+# and this code alters a .brd (but doesn't generate a lib). Gonna merge
+# these into one thing.
+# Doing this with a library (rather that directly in the .brd) is important
+# to handling rotation, anchor positions, etc. Like...those *could* be done
+# without the lib (by positioning and rotating each element), but that's
+# just adding a ton of math and complexity that we get 'free' with a lib.
+# Code will generate 'pinguin.lbr' in the local directory, clobbering
+# anything that's already there. This is fine. Along with the alterations
+# to the EAGLE file, maybe put a proceed Y/N prompt in the script that
+# warns about these file modifications.
+# Wait - it appears the library gets embedded in the .brd regardless.
+# WELL. Still need the 'element' because this handles rotation, etc.
+
+
 import os
+import xml.etree.ElementTree as ET
+from PIL import Image, ImageFont, ImageDraw
 
-FONT_SIZE = 64
-PAD = 12
+# Some global configurables ----
+
 DPI = 1200
-FONT_FILE = "fonts/FreeMonoBold.ttf"
+FONT_FILE = "fonts/Arimo/static/Arimo-Regular.ttf"
+#FONT_FEATURES=["-kern"]
+FONT_FEATURES=None
 
-STRINGS = ["GND", "5V"]
+# Configure .brd layers used for input and output
+TOP_OUT = 170  #    Top silk output (will be added if not present)
+BOTTOM_OUT = 171  # Bottom silk output (will be added if not present)
+TOP_IN = 172  #     Top labels input
+BOTTOM_IN = 173  #  Bottom labels input
+# Additional "IN" layers might get added here later as a cheap
+# way of specifying effects like inverted text in a box.
 
+label_num = 0
 
-font = ImageFont.truetype(FONT_FILE, FONT_SIZE)
+def layer_find_add(parent, list, number, name, color):
+    """ Search EAGLE tree for layer by number.
+        If present, return it. If not, create new layer and return that.
+    """
+    num_str = str(number)
+    for layer in list:
+        if layer.get("number") == num_str:
+            return layer  # Layer already present in file
+    # Layer's not present in EAGLE file, add it
+    return ET.SubElement(
+        parent,
+        "layer",
+        number=num_str,
+        name=name,
+        color=str(color),
+        fill="1",
+        visible="yes",
+        active="yes",
+    )
 
-# Get bounding box of string
-box = font.getbbox("GND", mode='', direction=None, features=None, language=None, stroke_width=0, anchor=None)
-
-height = box[3] - box[1] + PAD * 2
-radius = height // 2
-width = box[2] - box[0] + radius * 2
-# Create image and draw context
-image = Image.new('1', (width, height), color=0)
-draw = ImageDraw.Draw(image)
-
-# Draw box or oval
-draw.rounded_rectangle([(0, 0), (width - 1, height - 1)], radius=radius, fill=1, outline=None)
-
-# Draw text into it
-draw.text((radius - box[0], PAD - box[1]), "GND", font=font, color=0)
-
-# Save as a 1-bit 1200 DPI BMP
-image.save("out.bmp", dpi=(1200, 1200))
-
-# pass in anchor X,Y
 def rect(parent, x1, x2, y, ax=0, ay=0):
     scale = 25.4 / DPI
     x1 = (x1 - ax) * scale
     x2 = (x2 - ax) * scale
     y2 = (y + 1 - ay) * scale
     y = (y - ay) * scale
-    child = ET.SubElement(parent, "rectangle", x1="%3.2f" % x1, y1="%3.2f" % -y, x2="%3.2f" % x2, y2="%3.2f" % -y2, layer="21")
+    child = ET.SubElement(parent, "rectangle", x1="%3.2f" % x1, y1="%3.2f" % -y, x2="%3.2f" % x2, y2="%3.2f" % -y2, layer=str(TOP_OUT))
 
-eagle = ET.Element("eagle", version="6.00")
-drawing = ET.SubElement(eagle, "drawing")
-settings = ET.SubElement(drawing, "settings")
-grid = ET.SubElement(drawing, "grid", distance="1", unitdist="mm",
-                         unit="mm", style="lines", multiple="1", display="no",
-                         altdistance="0.1", altunitdist="mm", altunit="mm")
-layers = ET.SubElement(drawing, "layers")
-layer = ET.SubElement(layers, "layer", number="21", name="tPlace", color="7",
-                      fill="1", visible="yes", active="yes")
-library = ET.SubElement(drawing, "library")
+# Convert an image into a series of rectangles
+def rectify(parent, image, anchor_x, anchor_y):
+    for row in range(image.height):
+        pixel_state = 0  # Presume 'off' pixels to start
+        start_x = 0
+        for column in range(image.width):
+            pixel = image.getpixel((column, row))
+            if pixel != pixel_state:
+                pixel_state = pixel
+                if pixel_state > 0:
+                    start_x = column
+                else:
+                    rect(parent, start_x, column, row, anchor_x, anchor_y)
+        if pixel_state > 0:
+            rect(parent, start_x, image.width, row, anchor_x, anchor_y)
 
-packages = ET.SubElement(library, "packages")
-package = ET.SubElement(packages, "package", name="GND")
+def process(in_texts, in_layer, out_elements, out_packages, out_layer):
+    global label_num
+    in_str = str(in_layer)
+    out_str = str(out_layer)
+    for text in in_texts:
+        if text.get("layer") == in_str:
+            # Found a text object on the input layer
+            # Rasterize it and place in the library, add an
+            # element to the .brd output layer referencing it.
+            font = ImageFont.truetype(FONT_FILE, int(float(text.get("size")) * 66.6))
+            metrics = font.getmetrics()
+            box = font.getbbox(text.text, mode='', direction=None, features=FONT_FEATURES,
+              language=None, stroke_width=0, anchor=None)
+            width = box[2] - box[0] + 1
+            height = box[3] - box[1] + 1
+            image = Image.new('1', (width, height), color=0)
+            draw = ImageDraw.Draw(image)
+            draw.text((-box[0], -box[1]), text.text, font=font, fill=1, features=FONT_FEATURES)
+            anchor_x = width / 2  # TO DO: anchor alignment
+            anchor_y = (metrics[0] - metrics[1]) * 0.5
+            #anchor_y = height / 2
+            # Add package in .lbr
+            name = "pLabel" + str(label_num)
+            package = ET.SubElement(out_packages, "package", name=name)
+            rectify(package, image, anchor_x, anchor_y)
+            # Add element in .brd (referencing lbr package)
+            rot = text.get("rot")
+            if not rot:
+                rot = "R0"
+            ET.SubElement(out_elements, "element", name=name, library="pinguin", package=name, x=text.get("x"), y=text.get("y"), smashed="yes", rot=rot)
+            label_num += 1
 
-symbols = ET.SubElement(library, "symbols")
-symbol = ET.SubElement(symbols, "symbol", name="GND")
-text = ET.SubElement(symbol, "text", size="1.0", layer="94")
-text.text = "GND"
+# -----
 
-devicesets = ET.SubElement(library, "devicesets")
-deviceset = ET.SubElement(devicesets, "deviceset", name="GND")
-gates = ET.SubElement(deviceset, "gates")
-gate = ET.SubElement(gates, "gate", name="G$1", symbol="GND", x="0", y="0")
-devices = ET.SubElement(deviceset, "devices")
-device = ET.SubElement(devices, "device", name="", package="GND")
 
-ax = 0
-ay = height / 2
-for y in range(height):
-    # Figure out X spans
-    pixstate = 0  # Presume 'off' pixels to start
-    startx = 0
-    for x in range(width):
-        p = image.getpixel((x, y))
-        if p != pixstate:
-            pixstate = p
-            if pixstate > 0:
-                startx = x
-            else:
-                rect(package, startx, x, y, ax, ay)
-    if pixstate > 0:
-        rect(package, startx, width, y, ax, ay)
+brd_tree = ET.parse("AHT20.brd")
+brd_root = brd_tree.getroot()
+brd_layers = brd_root.findall("drawing/layers")[0]  # <layers> in .brd
+layer_list = brd_layers.findall("layer")  #           List of <layer> elements
 
-tree = ET.ElementTree(eagle)
+top_out = layer_find_add(brd_layers, layer_list, TOP_OUT, "Pinguin_tPlace", 14)
+# delete any children of out layers, something like:
+#for child in list(e):
+#    e.remove(child)
+bottom_out = layer_find_add(brd_layers, layer_list, BOTTOM_OUT, "Pinguin_bPlace", 13)
+top_in = layer_find_add(brd_layers, layer_list, TOP_IN, "Pinguin_tIn", 10)
+bottom_in = layer_find_add(brd_layers, layer_list, BOTTOM_IN, "Pinguin_bIn", 1)
+
+# Create .lbr tree and initial hierarchy
+
+lib_top = ET.Element("eagle", version="6.00")
+lib_drawing = ET.SubElement(lib_top, "drawing")
+ET.SubElement(lib_drawing, "settings")
+ET.SubElement(lib_drawing, "grid", distance="1", unitdist="mm",
+              unit="mm", style="lines", multiple="1", display="no",
+              altdistance="0.1", altunitdist="mm", altunit="mm")
+lib_layers = ET.SubElement(lib_drawing, "layers")
+ET.SubElement(lib_layers, "layer", number=str(TOP_OUT), name="Pinguin_tPlace", color="14",
+              fill="1", visible="yes", active="yes")
+ET.SubElement(lib_layers, "layer", number=str(BOTTOM_OUT), name="Pinguin_bPlace", color="13",
+              fill="1", visible="yes", active="yes")
+# In fact - check if things like settings, grid even matter in library
+library = ET.SubElement(lib_drawing, "library")
+lib_packages = ET.SubElement(library, "packages")
+lib_symbols = ET.SubElement(library, "symbols")
+lib_devicesets = ET.SubElement(library, "devicesets")
+
+
+# Get list of text objects in the .brd file
+
+brd_elements = brd_root.findall("drawing/board/elements")[0]  # <elements> in .brd
+brd_plain = brd_root.findall("drawing/board/plain")[0]
+#texts = brd_root.findall("drawing/board/plain/text")
+brd_texts = brd_plain.findall("text")
+# Need to do some check-if-exist stuff here
+brd_libraries = brd_root.findall("drawing/board/libraries")[0]  # <libraries> in .brd
+brd_library = ET.SubElement(brd_libraries, "library", name="pinguin")
+brd_packages = ET.SubElement(brd_library, "packages")
+
+
+process(brd_texts, TOP_IN, brd_elements, brd_packages, TOP_OUT)
+process(brd_texts, BOTTOM_IN, brd_elements, brd_packages, BOTTOM_OUT)
+
+
+
+
+
+
+
+
+
+
+# Sort .brd layers list so Pinguin-added items aren't at end in EAGLE menu
+brd_layers[:] = sorted(brd_layers, key=lambda child: int(child.get("number")))
+
+lib_tree = ET.ElementTree(lib_top)
+
 # Unfortunately indent() is only avail in Python 3.9; we're on 3.7
-#ET.indent(tree, space=" ")
-tree.write("foo.lbr", encoding="utf-8", xml_declaration=True)
-# So instead of indent(), reformat using command line tool...
-os.system("xmllint --format - < foo.lbr > foo2.lbr")
+# ET.indent(tree, space=" ")
+# That means the resulting XML will all be packed into one long line.
+brd_tree.write("AHT20_out.brd.tmp", encoding="utf-8", xml_declaration=True)
+lib_tree.write("pinguin.lbr.tmp", encoding="utf-8", xml_declaration=True)
+# So, instead of indent(), reformat to legible XML using command line tool...
+os.system("xmllint --format - < AHT20_out.brd.tmp > AHT20_out.brd")
+os.system("xmllint --format - < pinguin.lbr.tmp > pinguin.lbr")
+os.remove("AHT20_out.brd.tmp")
+os.remove("pinguin.lbr.tmp")
+
+
+# ------------------------------
+
+
+# TO DO: create packages/symbols/etc. from text elements in .brd
+
+# Don't worry about naming the packages anything meaningful,
+# they can just be "label1", "label2", etc.
+
+# Not sure what of these are required in lib (possibly all).
+# Apparently not!
+
+#lib_deviceset = ET.SubElement(lib_devicesets, "deviceset", name="GND")
+#lib_devices = ET.SubElement(lib_deviceset, "devices")
+
+#symbol = ET.SubElement(lib_symbols, "symbol", name="GND")
+#text = ET.SubElement(symbol, "text", size="1.0", layer="94")
+#text.text = "GND"
+
+#gates = ET.SubElement(lib_deviceset, "gates")
+#gate = ET.SubElement(gates, "gate", name="G$1", symbol="GND", x="0", y="0")
+#device = ET.SubElement(lib_devices, "device", name="", package="GND")
+
+
+
+# Default alignment (None) is lower left
+# center alignment is centered on BOTH axes
+# <!ENTITY % TextFont          "(vector | proportional | fixed)">
+# <!ENTITY % Align             "(bottom-left | bottom-center | bottom-right | center-left | center | center-right | top-left | top-center | top-right)">
+# (is position of anchor relative to text)
+# <!ATTLIST text
+#           x             %Coord;        #REQUIRED
+#           y             %Coord;        #REQUIRED
+#           size          %Dimension;    #REQUIRED
+#           layer         %Layer;        #REQUIRED
+#           font          %TextFont;     "proportional"
+#           ratio         %Int;          "8" <- stroke thickness
+#           rot           %Rotation;     "R0" <- degrees (not just 90 inc)
+#           align         %Align;        "bottom-left"
+#           distance      %Int;          "50" <- line distance
+#           grouprefs     IDREFS         #IMPLIED
+#           >
+# Ratio is ignored on proportional font
+
+# TO DO: remove existing objects in the output layer
+# parent.remove(child)
+
+
+#    # First 4 are required, rest are optional and have defaults if not present
+#    print(
+#        t.get("x"),
+#        t.get("y"),
+#        t.get("size"),
+#        t.get("layer"),
+#        t.get("font", "proportional"),
+#        t.get("ratio", "8"),
+#        t.get("rot", "R0"),
+#        t.get("align", "bottom-left"),
+#        t.text,
+#    )
+
+# <!ATTLIST layer
+#          number        %Layer;        #REQUIRED
+#          name          %String;       #REQUIRED
+#          color         %Int;          #REQUIRED
+#          fill          %Int;          #REQUIRED
+#          visible       %Bool;         "yes"
+#          active        %Bool;         "yes"
+#          >
