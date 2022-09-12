@@ -2,6 +2,24 @@
 # Rasterize these in a nicer font and place them on a different layer in
 # the .brd file.
 
+# Referencing a library element in a .brd:
+# <element name="E$1" library="foo2" package="GND" value="" x="6.35" y="10.668" smashed="yes" rot="R45"/>
+# SO - this code might be able to generate a lib, put all labels in that,
+# and just reference elements within (allowing rotation, etc.)
+# At the moment, pinguin.py generates a library (but does not alter a .brd),
+# and this code alters a .brd (but doesn't generate a lib). Gonna merge
+# these into one thing.
+# Doing this with a library (rather that directly in the .brd) is important
+# to handling rotation, anchor positions, etc. Like...those *could* be done
+# without the lib (by positioning and rotating each element), but that's
+# just adding a ton of math and complexity that we get 'free' with a lib.
+# Code will generate 'pinguin.lbr' in the local directory, clobbering
+# anything that's already there. This is fine. Along with the alterations
+# to the EAGLE file, maybe put a proceed Y/N prompt in the script that
+# warns about these file modifications.
+
+
+
 import os
 import xml.etree.ElementTree as ET
 from PIL import Image, ImageFont, ImageDraw
