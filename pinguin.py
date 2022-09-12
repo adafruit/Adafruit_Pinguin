@@ -1,26 +1,9 @@
-# This reads an EAGLE .brd file and looks for text objects.
-# They're rasterized in a nicer font and placed in a .lbr file,
-# with references to those elements inserted in the .brd.
-
-
-# Referencing a library element in a .brd:
-# <element name="E$1" library="foo2" package="GND" value="" x="6.35" y="10.668" smashed="yes" rot="R45"/>
-# SO - this code might be able to generate a lib, put all labels in that,
-# and just reference elements within (allowing rotation, etc.)
-# At the moment, pinguin.py generates a library (but does not alter a .brd),
-# and this code alters a .brd (but doesn't generate a lib). Gonna merge
-# these into one thing.
-# Doing this with a library (rather that directly in the .brd) is important
-# to handling rotation, anchor positions, etc. Like...those *could* be done
-# without the lib (by positioning and rotating each element), but that's
-# just adding a ton of math and complexity that we get 'free' with a lib.
-# Code will generate 'pinguin.lbr' in the local directory, clobbering
-# anything that's already there. This is fine. Along with the alterations
-# to the EAGLE file, maybe put a proceed Y/N prompt in the script that
-# warns about these file modifications.
-# Wait - it appears the library gets embedded in the .brd regardless.
-# WELL. Still need the 'element' because this handles rotation, etc.
-
+"""
+Adafruit Pinguin -- an EAGLE silkscreen label generator for nicer fonts
+with minimal intervention. Reads an EAGLE .brd file, looking for text
+objects on specific layers, adds raster equivalents (in nicer fonts) on
+different layers, which can be merged with the normal silk output.
+"""
 
 import os
 import xml.etree.ElementTree as ET
@@ -30,8 +13,8 @@ from PIL import Image, ImageFont, ImageDraw
 
 DPI = 1200
 FONT_FILE = "fonts/Arimo/static/Arimo-Regular.ttf"
-#FONT_FEATURES=["-kern"]
-FONT_FEATURES=None
+# FONT_FEATURES=["-kern"]
+FONT_FEATURES = None
 
 # Configure .brd layers used for input and output
 TOP_OUT = 170  #    Top silk output (will be added if not present)
@@ -43,9 +26,10 @@ BOTTOM_IN = 173  #  Bottom labels input
 
 label_num = 0
 
+
 def layer_find_add(parent, list, number, name, color):
-    """ Search EAGLE tree for layer by number.
-        If present, return it. If not, create new layer and return that.
+    """Search EAGLE tree for layer by number.
+    If present, return it. If not, create new layer and return that.
     """
     num_str = str(number)
     for layer in list:
@@ -63,13 +47,23 @@ def layer_find_add(parent, list, number, name, color):
         active="yes",
     )
 
+
 def rect(parent, x1, x2, y, ax=0, ay=0):
     scale = 25.4 / DPI
     x1 = (x1 - ax) * scale
     x2 = (x2 - ax) * scale
     y2 = (y + 1 - ay) * scale
     y = (y - ay) * scale
-    child = ET.SubElement(parent, "rectangle", x1="%3.2f" % x1, y1="%3.2f" % -y, x2="%3.2f" % x2, y2="%3.2f" % -y2, layer=str(TOP_OUT))
+    child = ET.SubElement(
+        parent,
+        "rectangle",
+        x1="%3.2f" % x1,
+        y1="%3.2f" % -y,
+        x2="%3.2f" % x2,
+        y2="%3.2f" % -y2,
+        layer=str(TOP_OUT),
+    )
+
 
 # Convert an image into a series of rectangles
 def rectify(parent, image, anchor_x, anchor_y):
@@ -87,6 +81,7 @@ def rectify(parent, image, anchor_x, anchor_y):
         if pixel_state > 0:
             rect(parent, start_x, image.width, row, anchor_x, anchor_y)
 
+
 def process(in_texts, in_layer, out_elements, out_packages, out_layer):
     global label_num
     in_str = str(in_layer)
@@ -98,16 +93,25 @@ def process(in_texts, in_layer, out_elements, out_packages, out_layer):
             # element to the .brd output layer referencing it.
             font = ImageFont.truetype(FONT_FILE, int(float(text.get("size")) * 66.6))
             metrics = font.getmetrics()
-            box = font.getbbox(text.text, mode='', direction=None, features=FONT_FEATURES,
-              language=None, stroke_width=0, anchor=None)
+            box = font.getbbox(
+                text.text,
+                mode="",
+                direction=None,
+                features=FONT_FEATURES,
+                language=None,
+                stroke_width=0,
+                anchor=None,
+            )
             width = box[2] - box[0] + 1
             height = box[3] - box[1] + 1
-            image = Image.new('1', (width, height), color=0)
+            image = Image.new("1", (width, height), color=0)
             draw = ImageDraw.Draw(image)
-            draw.text((-box[0], -box[1]), text.text, font=font, fill=1, features=FONT_FEATURES)
+            draw.text(
+                (-box[0], -box[1]), text.text, font=font, fill=1, features=FONT_FEATURES
+            )
             anchor_x = width / 2  # TO DO: anchor alignment
             anchor_y = (metrics[0] - metrics[1]) * 0.5
-            #anchor_y = height / 2
+            # anchor_y = height / 2
             # Add package in .lbr
             name = "pLabel" + str(label_num)
             package = ET.SubElement(out_packages, "package", name=name)
@@ -116,8 +120,19 @@ def process(in_texts, in_layer, out_elements, out_packages, out_layer):
             rot = text.get("rot")
             if not rot:
                 rot = "R0"
-            ET.SubElement(out_elements, "element", name=name, library="pinguin", package=name, x=text.get("x"), y=text.get("y"), smashed="yes", rot=rot)
+            ET.SubElement(
+                out_elements,
+                "element",
+                name=name,
+                library="pinguin",
+                package=name,
+                x=text.get("x"),
+                y=text.get("y"),
+                smashed="yes",
+                rot=rot,
+            )
             label_num += 1
+
 
 # -----
 
@@ -138,52 +153,61 @@ for layer in layer_list:
 # Rather than find/add - just delete any such list that's there
 # Do this for Pinguin_tPlace and Pinguin_bPlace
 
-top_out = ET.SubElement(brd_layers, "layer", number=str(TOP_OUT), name="Pinguin_tPlace", color=str(14), fill="1", visible="yes", active="yes")
-bottom_out = ET.SubElement(brd_layers, "layer", number=str(BOTTOM_OUT), name="Pinguin_bPlace", color=str(13), fill="1", visible="yes", active="yes")
+top_out = ET.SubElement(
+    brd_layers,
+    "layer",
+    number=str(TOP_OUT),
+    name="Pinguin_tPlace",
+    color=str(14),
+    fill="1",
+    visible="yes",
+    active="yes",
+)
+bottom_out = ET.SubElement(
+    brd_layers,
+    "layer",
+    number=str(BOTTOM_OUT),
+    name="Pinguin_bPlace",
+    color=str(13),
+    fill="1",
+    visible="yes",
+    active="yes",
+)
 
 # OR - delete list, then add
-#top_out = layer_find_add(brd_layers, layer_list, TOP_OUT, "Pinguin_tPlace", 14)
+# top_out = layer_find_add(brd_layers, layer_list, TOP_OUT, "Pinguin_tPlace", 14)
 # delete any children of out layers, something like:
-#for child in list(e):
+# for child in list(e):
 #    e.remove(child)
-#bottom_out = layer_find_add(brd_layers, layer_list, BOTTOM_OUT, "Pinguin_bPlace", 13)
+# bottom_out = layer_find_add(brd_layers, layer_list, BOTTOM_OUT, "Pinguin_bPlace", 13)
 top_in = layer_find_add(brd_layers, layer_list, TOP_IN, "Pinguin_tIn", 10)
 bottom_in = layer_find_add(brd_layers, layer_list, BOTTOM_IN, "Pinguin_bIn", 1)
 
 # Sort .brd layers list so Pinguin-added items aren't at end in EAGLE menu
 brd_layers[:] = sorted(brd_layers, key=lambda child: int(child.get("number")))
 
-
 # Get list of text objects in the .brd file
 
 brd_elements = brd_root.findall("drawing/board/elements")[0]  # <elements> in .brd
 brd_plain = brd_root.findall("drawing/board/plain")[0]
-#texts = brd_root.findall("drawing/board/plain/text")
+# texts = brd_root.findall("drawing/board/plain/text")
 brd_texts = brd_plain.findall("text")
 # Need to do some check-if-exist stuff here
 brd_libraries = brd_root.findall("drawing/board/libraries")[0]  # <libraries> in .brd
-brd_library_list = brd_libraries.findall("library")  #            List of <library> items
+brd_library_list = brd_libraries.findall(
+    "library"
+)  #            List of <library> items
 for lib in brd_library_list:  #                                   Iterate through list
     if lib.get("name") == "pinguin":  #                           If pinguin library
-        brd_libraries.remove(lib)  #                              Delete it, we'll make a new one
+        brd_libraries.remove(
+            lib
+        )  #                              Delete it, we'll make a new one
 
 brd_library = ET.SubElement(brd_libraries, "library", name="pinguin")
 brd_packages = ET.SubElement(brd_library, "packages")
 
-
 process(brd_texts, TOP_IN, brd_elements, brd_packages, TOP_OUT)
 process(brd_texts, BOTTOM_IN, brd_elements, brd_packages, BOTTOM_OUT)
-
-
-
-
-
-
-
-
-
-
-
 
 # Unfortunately indent() is only avail in Python 3.9; we're on 3.7
 # ET.indent(tree, space=" ")
@@ -192,7 +216,6 @@ brd_tree.write("AHT20_out.brd.tmp", encoding="utf-8", xml_declaration=True)
 # So, instead of indent(), reformat to legible XML using command line tool...
 os.system("xmllint --format - < AHT20_out.brd.tmp > AHT20_out.brd")
 os.remove("AHT20_out.brd.tmp")
-
 
 
 # ------------------------------
