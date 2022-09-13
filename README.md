@@ -26,7 +26,8 @@ INCLUDE the license file; don't just add things wantonly!
 
 `python pinguin.py filename.brd`
 
-Output will go to `filename_out.brd` (file will be overwritten if present).
+Output will then go to `filename_out.brd`, where `filename` is taken from the
+input file. File will be overwritten if present.
 
 Contents of layers 170 and 171 (if any) will be overwritten. Please back up
 board file first.
