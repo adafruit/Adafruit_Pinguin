@@ -25,17 +25,26 @@ INCLUDE the license file; don't just add things wantonly!
 ### Use
 
 `python pinguin.py filename.brd`
+
 Output will go to `filename_out.brd` (file will be overwritten if present).
+
 Contents of layers 170 and 171 (if any) will be overwritten. Please back up
 board file first.
 
 Optional args:
+
 `-dpi N` Set output resolution (default 1200)
+
 `-vfont font.ttf` Override 'vector' font (default is GNU Free Sans)
+
 `-pfont font.ttf` Override 'proportional' font (default is Arimo regular)
+
 `-ffont font.ttf` Override 'fixed' font (default is GNU Free Mono)
+
 `-vscale N` Change relative scale of 'vector' font (default = 1.33)
+
 `-pscale N` Change relative scale of 'proportional' font (default = 1.41)
+
 `-pscale N` Change relative scale of 'fixed' font (default = 1.41)
 
 ### To Do
