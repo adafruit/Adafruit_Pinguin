@@ -20,19 +20,14 @@ BOTTOM_IN = 173  #  Bottom labels input
 # Additional "IN" layers might get added here later as a cheap
 # way of specifying effects like inverted text in a box.
 
-label_num = 0
-
-# Sloppy arg parsing for now, accepts a filename for input,
-# output will be the same with _out inserted before extension.
-# Later will add stuff here for font overrides, etc.
 parser = argparse.ArgumentParser()
 parser.add_argument('filename', nargs='?', default="AHT20.brd")
-parser.add_argument('-vfont', type=str, default="fonts/Arimo/static/Arimo-Regular.ttf")
-parser.add_argument('-pfont', type=str, default="fonts/GNU/FreeSans.ttf")
+parser.add_argument('-vfont', type=str, default="fonts/GNU/FreeSans.ttf")
+parser.add_argument('-pfont', type=str, default="fonts/Arimo/static/Arimo-Regular.ttf")
 parser.add_argument('-ffont', type=str, default="fonts/GNU/FreeMono.ttf")
-parser.add_argument('-vscale', type=float, default=66.6)
-parser.add_argument('-pscale', type=float, default=66.6)
-parser.add_argument('-fscale', type=float, default=66.6)
+parser.add_argument('-vscale', type=float, default=1.414)
+parser.add_argument('-pscale', type=float, default=1.414)
+parser.add_argument('-fscale', type=float, default=1.414)
 parser.add_argument('-dpi', type=int, default=1200)
 args = parser.parse_args()
 infile = args.filename
@@ -48,7 +43,10 @@ else:
 font_spec = ((args.vfont, args.vscale),
              (args.pfont, args.pscale),
              (args.ffont, args.fscale))
-font_units_scale = 25.4 / args.dpi
+mm_to_px = args.dpi / 25.4
+px_to_mm = 25.4 / args.dpi
+
+label_num = 0  # Library parts are added incrementally
 
 
 def layer_find_add(parent, list, number, name, color):
@@ -73,10 +71,10 @@ def layer_find_add(parent, list, number, name, color):
 
 
 def rect(parent, x1, x2, y, ax=0, ay=0):
-    x1 = (x1 - ax) * font_units_scale
-    x2 = (x2 - ax) * font_units_scale
-    y2 = (y + 1 - ay) * font_units_scale
-    y = (y - ay) * font_units_scale
+    x1 = (x1 - ax) * px_to_mm
+    x2 = (x2 - ax) * px_to_mm
+    y2 = (y + 1 - ay) * px_to_mm
+    y = (y - ay) * px_to_mm
     child = ET.SubElement(
         parent,
         "rectangle",
@@ -130,7 +128,18 @@ def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer):
             # Rasterize it and place in the library, add an
             # element to the .brd output layer referencing it.
             text_font = font_list.index(text.get("font", "proportional"))
-            text_size = int(float(text.get("size")) * font_spec[text_font][1] + 0.5)
+# TO DO: units here are in pixels...need to handle
+# DPI conversion here, NOT in the rect function!
+# (though that might need in/mm conversion)
+# ImageFont size is in pixels...useless without DPI.
+# I'm going to GUESS it's 72 or 96.
+# Oh, OK - text.get(size) is likely document units
+# (might be in or mm).
+# DPI is inches.
+# scale former by latter to get pixel units,
+# then always replicate at 1:1
+            #text_size = int(float(text.get("size")) * font_spec[text_font][1] + 0.5)
+            text_size = int(float(text.get("size")) * font_spec[text_font][1] * mm_to_px + 0.5)
             font = ImageFont.truetype(font_spec[text_font][0], text_size)
             metrics = font.getmetrics()
             box = font.getbbox(
@@ -142,6 +151,7 @@ def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer):
                 stroke_width=0,
                 anchor=None,
             )
+            print(metrics, box)
             width = box[2] - box[0] + 1
             height = box[3] - box[1] + 1
             image = Image.new("1", (width, height), color=0)
@@ -200,9 +210,6 @@ for layer in layer_list:
     if layer.get("number") in layer_names:
         brd_layers.remove(layer)
 
-# Rather than find/add - just delete any such list that's there
-# Do this for Pinguin_tPlace and Pinguin_bPlace
-
 top_out = ET.SubElement(
     brd_layers,
     "layer",
@@ -224,17 +231,23 @@ bottom_out = ET.SubElement(
     active="yes",
 )
 
-# OR - delete list, then add
-# top_out = layer_find_add(brd_layers, layer_list, TOP_OUT, "Pinguin_tPlace", 14)
-# delete any children of out layers, something like:
-# for child in list(e):
-#    e.remove(child)
-# bottom_out = layer_find_add(brd_layers, layer_list, BOTTOM_OUT, "Pinguin_bPlace", 13)
 top_in = layer_find_add(brd_layers, layer_list, TOP_IN, "Pinguin_tIn", 10)
 bottom_in = layer_find_add(brd_layers, layer_list, BOTTOM_IN, "Pinguin_bIn", 1)
 
 # Sort .brd layers list so Pinguin-added items aren't at end in EAGLE menu
 brd_layers[:] = sorted(brd_layers, key=lambda child: int(child.get("number")))
+
+brd_grid = brd_root.findall("drawing/grid")[0]
+print(brd_grid.get("unit"))
+# could be "mic", "mm", "mil" or "inch"
+# micrometer, millimeter, mills (1/1000 in), inch
+# If inch, text scale is equal to DPI setting
+# if mills, DPI / 1000
+# etc.
+print(brd_grid.get("distance"))
+# Text units are always mm regardless of doc units setting.
+# (Properties dialog scales so units = doc units, but file is mm)
+
 
 # Get list of text objects in the .brd file
 
