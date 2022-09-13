@@ -55,7 +55,7 @@ font_spec = (
 mm_to_px = args.dpi / 25.4  # For scaling text to pixel units
 px_to_mm = 25.4 / args.dpi  # For scaling pixels back to document
 
-# UTILITY FUNCS ------------------------------------------------------------
+# SOME FUNCTIONS TO DO SOME THINGS -----------------------------------------
 
 def layer_find_add(parent, list, number, name, color):
     """Search EAGLE tree for layer by number.
@@ -78,7 +78,9 @@ def layer_find_add(parent, list, number, name, color):
     )
 
 
-def rect(parent, x1, x2, y, ax=0, ay=0):
+def rect(parent, layer, x1, x2, y, ax=0, ay=0):
+    """Append a single-row rectangle to XML doc. Input units are pixels
+    relative to anchor point (ax, ay), output is mm."""
     x1 = (x1 - ax) * px_to_mm
     x2 = (x2 - ax) * px_to_mm
     y2 = (y + 1 - ay) * px_to_mm
@@ -90,12 +92,12 @@ def rect(parent, x1, x2, y, ax=0, ay=0):
         y1="%3.2f" % -y,
         x2="%3.2f" % x2,
         y2="%3.2f" % -y2,
-        layer=str(TOP_OUT),
+        layer=layer
     )
 
 
-# Convert an image into a series of rectangles
-def rectify(parent, image, anchor_x, anchor_y):
+def rectify(parent, layer, image, anchor_x, anchor_y):
+    """Convert a PIL image to a series of single-row rectangles."""
     for row in range(image.height):
         pixel_state = 0  # Presume 'off' pixels to start
         start_x = 0
@@ -106,11 +108,12 @@ def rectify(parent, image, anchor_x, anchor_y):
                 if pixel_state > 0:
                     start_x = column
                 else:
-                    rect(parent, start_x, column, row, anchor_x, anchor_y)
+                    rect(parent, layer, start_x, column, row, anchor_x, anchor_y)
         if pixel_state > 0:
-            rect(parent, start_x, image.width, row, anchor_x, anchor_y)
+            rect(parent, layer, start_x, image.width, row, anchor_x, anchor_y)
 
-# Order of this list is important, don't mess with
+# Order of these lists is important, don't mess with (value returned by
+# index() is used for subsequent operations).
 align_list = [
     "bottom-left",
     "bottom-center",
@@ -126,7 +129,9 @@ font_list = ["vector", "proportional", "fixed"]
 
 
 def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer):
-    global label_num
+    """Process text elements in one layer of EAGLE file; convert fonts
+    to raster library elements."""
+    global label_num  # Icky, sorry
     in_str = str(in_layer)
     out_str = str(out_layer)
     for text in in_texts:
@@ -140,6 +145,7 @@ def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer):
             )
             font = ImageFont.truetype(font_spec[text_font][0], text_size)
             metrics = font.getmetrics()
+            # Confirmed, this doesn't work with multi-line text
             box = font.getbbox(
                 text.text,
                 mode="",
@@ -149,7 +155,6 @@ def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer):
                 stroke_width=0,
                 anchor=None,
             )
-            print(metrics, box)
             width = box[2] - box[0] + 1
             height = box[3] - box[1] + 1
             image = Image.new("1", (width, height), color=0)
@@ -164,16 +169,17 @@ def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer):
                 anchor_x = width / 2
             else:
                 anchor_x = width
+            # Ah! This will have problems with multi-line text.
             if anchor_vert == 0:
-                anchor_y = metrics[0] - metrics[1]
+                anchor_y = metrics[0] - box[1]
             elif anchor_vert == 1:
-                anchor_y = (metrics[0] - metrics[1]) * 0.5
+                anchor_y = (metrics[0] - box[1]) * 0.5
             else:
-                anchor_y = 0
+                anchor_y = 1
             # Add package in library
             name = "pLabel" + str(label_num)
             package = ET.SubElement(out_packages, "package", name=name)
-            rectify(package, image, anchor_x, anchor_y)
+            rectify(package, out_str, image, anchor_x, anchor_y)
             # Add element in .brd (referencing lbr package)
             rot = text.get("rot", "R0")
             ET.SubElement(
