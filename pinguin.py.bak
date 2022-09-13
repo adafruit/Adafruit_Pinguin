@@ -81,9 +81,6 @@ def rectify(parent, image, anchor_x, anchor_y):
         if pixel_state > 0:
             rect(parent, start_x, image.width, row, anchor_x, anchor_y)
 
-# Order of this list is important, don't mess with
-align_list = [ "bottom-left", "bottom-center", "bottom-right", "center-left", "center", "center-right", "top-left", "top-center", "top-right" ]
-font_list = ["vector", "proportional", "fixed"]
 
 def process(in_texts, in_layer, out_elements, out_packages, out_layer):
     global label_num
@@ -94,15 +91,7 @@ def process(in_texts, in_layer, out_elements, out_packages, out_layer):
             # Found a text object on the input layer
             # Rasterize it and place in the library, add an
             # element to the .brd output layer referencing it.
-            text_font = font_list.index(text.get("font", "proportional"))
-            text_size = int(float(text.get("size")) * 66.6 + 0.5)
-
-            if text_font == 0:  # Vector
-                font = ImageFont.truetype("fonts/GNU/FreeSans.ttf", text_size)
-            elif text_font == 1: # Proportional
-                font = ImageFont.truetype(FONT_FILE, text_size)
-            else:  # Fixed
-                font = ImageFont.truetype("fonts/GNU/FreeMono.ttf", text_size)
+            font = ImageFont.truetype(FONT_FILE, int(float(text.get("size")) * 66.6))
             metrics = font.getmetrics()
             box = font.getbbox(
                 text.text,
@@ -120,27 +109,17 @@ def process(in_texts, in_layer, out_elements, out_packages, out_layer):
             draw.text(
                 (-box[0], -box[1]), text.text, font=font, fill=1, features=FONT_FEATURES
             )
-            text_align = align_list.index(text.get("align", "bottom-left"))
-            anchor_horiz = text_align % 3
-            anchor_vert = text_align // 3
-            if anchor_horiz == 0:
-                anchor_x = 0
-            elif anchor_horiz == 1:
-                anchor_x = width / 2
-            else:
-                anchor_x = width
-            if anchor_vert == 0:
-                anchor_y = metrics[0] - metrics[1]
-            elif anchor_vert == 1:
-                anchor_y = (metrics[0] - metrics[1]) * 0.5
-            else:
-                anchor_y = 0
-            # Add package in library
+            anchor_x = width / 2  # TO DO: anchor alignment
+            anchor_y = (metrics[0] - metrics[1]) * 0.5
+            # anchor_y = height / 2
+            # Add package in .lbr
             name = "pLabel" + str(label_num)
             package = ET.SubElement(out_packages, "package", name=name)
             rectify(package, image, anchor_x, anchor_y)
             # Add element in .brd (referencing lbr package)
-            rot = text.get("rot", "R0")
+            rot = text.get("rot")
+            if not rot:
+                rot = "R0"
             ET.SubElement(
                 out_elements,
                 "element",

@@ -202,10 +202,10 @@
 <wire x1="25.4" y1="15.24" x2="22.86" y2="17.78" width="0" layer="20" curve="90"/>
 <wire x1="22.86" y1="17.78" x2="2.54" y2="17.78" width="0" layer="20"/>
 <wire x1="2.54" y1="17.78" x2="0" y2="15.24" width="0" layer="20" curve="90"/>
-<text x="8.89" y="0.889" size="1.016" layer="21" font="vector" ratio="14" align="center">VIN</text>
+<text x="8.89" y="0.889" size="1.016" layer="172" font="fixed" ratio="14" align="center">VIN</text>
 <text x="11.43" y="4.191" size="1.016" layer="172" font="vector" ratio="14" align="center">GND</text>
-<text x="14.097" y="0.889" size="1.016" layer="21" font="vector" ratio="14" align="center">SCL</text>
-<text x="16.637" y="4.191" size="1.016" layer="21" font="vector" ratio="14" align="center">SDA</text>
+<text x="14.097" y="0.889" size="1.016" layer="172" font="fixed" ratio="14" align="center">SCL</text>
+<text x="16.637" y="4.191" size="1.016" layer="172" font="fixed" ratio="14" align="center">SDA</text>
 <text x="12.7" y="16.51" size="1.778" layer="172" ratio="15" rot="R12" align="center">AHT20</text>
 <text x="14.351" y="14.605" size="1.143" layer="172" ratio="15" align="center">Temp &amp; Humidity</text>
 <dimension x1="12.7" y1="2.54" x2="12.7" y2="15.24" x3="29.337" y3="8.89" textsize="1.778" layer="47" dtype="vertical" unit="inch"/>
@@ -224,6 +224,15 @@ Humidity Sensor</text>
 <text x="6.858" y="10.414" size="1.27" layer="22" font="vector" ratio="15" rot="MR180" align="center">I2C
 addr
 0x38</text>
+<text x="7.747" y="11.303" size="0.508" layer="172" ratio="15" rot="R15" align="center">Hello</text>
+<text x="7.747" y="11.811" size="0.508" layer="172" ratio="15" rot="R353" align="bottom-center">Hello</text>
+<text x="7.747" y="10.795" size="0.508" layer="172" ratio="15" rot="R352" align="top-center">Hello</text>
+<text x="6.731" y="11.303" size="0.508" layer="172" ratio="15" rot="R355" align="center-right">Hello</text>
+<text x="6.731" y="11.811" size="0.508" layer="172" ratio="15" rot="R3" align="bottom-right">Hello</text>
+<text x="6.731" y="10.795" size="0.508" layer="172" ratio="15" rot="R31" align="top-right">Hello</text>
+<text x="8.763" y="11.303" size="0.508" layer="172" ratio="15" rot="R357" align="center-left">Hello</text>
+<text x="8.763" y="11.811" size="0.508" layer="172" ratio="15" rot="R22">Hello</text>
+<text x="8.763" y="10.795" size="0.508" layer="172" ratio="15" rot="R338" align="top-left">Hello</text>
 </plain>
 <libraries>
 <library name="microbuilder">
