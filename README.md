@@ -33,7 +33,7 @@ board file first.
 
 Optional args:
 
-`-dpi N` Set output resolution (default 1200)
+`-dpi N` Set output resolution (default = 1200)
 
 `-vfont font.ttf` Override 'vector' font (default is GNU Free Sans)
 
@@ -45,7 +45,7 @@ Optional args:
 
 `-pscale N` Change relative scale of 'proportional' font (default = 1.41)
 
-`-pscale N` Change relative scale of 'fixed' font (default = 1.41)
+`-fscale N` Change relative scale of 'fixed' font (default = 1.41)
 
 ### To Do
 - Multi-line text is not yet working.
