@@ -143,9 +143,15 @@ def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer):
             text_size = int(
                 float(text.get("size")) * font_spec[text_font][1] * mm_to_px + 0.5
             )
+            # Confirmed, this doesn't work with multi-line text
+            # print(text.text.split("\n"))
+            # Will need to find bounds common to whole list,
+            # determine line spacing, etc.
+            # Oh, or there's ImageDraw.multiline_textbbox()
+            # (xy, text, font, anchor, spacing, align, direction,
+            #  features, language, stroke_width, embedded_color)
             font = ImageFont.truetype(font_spec[text_font][0], text_size)
             metrics = font.getmetrics()
-            # Confirmed, this doesn't work with multi-line text
             box = font.getbbox(
                 text.text,
                 mode="",
@@ -159,6 +165,7 @@ def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer):
             height = box[3] - box[1] + 1
             image = Image.new("1", (width, height), color=0)
             draw = ImageDraw.Draw(image)
+            # draw.multiline_text(xy, text, font, fill, align)
             draw.text((-box[0], -box[1]), text.text, font=font, fill=1, features=None)
             text_align = align_list.index(text.get("align", "bottom-left"))
             anchor_horiz = text_align % 3
