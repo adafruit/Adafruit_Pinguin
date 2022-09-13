@@ -12,11 +12,6 @@ from PIL import Image, ImageFont, ImageDraw
 
 # Some global configurables ----
 
-DPI = 1200
-FONT_FILE = "fonts/Arimo/static/Arimo-Regular.ttf"
-# FONT_FEATURES=["-kern"]
-FONT_FEATURES = None
-
 # Configure .brd layers used for input and output
 TOP_OUT = 170  #    Top silk output (will be added if not present)
 BOTTOM_OUT = 171  # Bottom silk output (will be added if not present)
@@ -32,7 +27,15 @@ label_num = 0
 # Later will add stuff here for font overrides, etc.
 parser = argparse.ArgumentParser()
 parser.add_argument('filename', nargs='?', default="AHT20.brd")
+parser.add_argument('-vfont', type=str, default="fonts/Arimo/static/Arimo-Regular.ttf")
+parser.add_argument('-pfont', type=str, default="fonts/GNU/FreeSans.ttf")
+parser.add_argument('-ffont', type=str, default="fonts/GNU/FreeMono.ttf")
+parser.add_argument('-vscale', type=float, default=66.6)
+parser.add_argument('-pscale', type=float, default=66.6)
+parser.add_argument('-fscale', type=float, default=66.6)
+parser.add_argument('-dpi', type=int, default=1200)
 args = parser.parse_args()
+infile = args.filename
 path = os.path.split(args.filename)
 idx = path[1].rfind(".brd")
 if idx < 0:
@@ -42,6 +45,10 @@ if len(path[0]):
     outfile = path[0] + '/' + path[1][:idx] + "_out.brd"
 else:
     outfile = path[1][:idx] + "_out.brd"
+font_spec = ((args.vfont, args.vscale),
+             (args.pfont, args.pscale),
+             (args.ffont, args.fscale))
+font_units_scale = 25.4 / args.dpi
 
 
 def layer_find_add(parent, list, number, name, color):
@@ -66,11 +73,10 @@ def layer_find_add(parent, list, number, name, color):
 
 
 def rect(parent, x1, x2, y, ax=0, ay=0):
-    scale = 25.4 / DPI
-    x1 = (x1 - ax) * scale
-    x2 = (x2 - ax) * scale
-    y2 = (y + 1 - ay) * scale
-    y = (y - ay) * scale
+    x1 = (x1 - ax) * font_units_scale
+    x2 = (x2 - ax) * font_units_scale
+    y2 = (y + 1 - ay) * font_units_scale
+    y = (y - ay) * font_units_scale
     child = ET.SubElement(
         parent,
         "rectangle",
@@ -124,20 +130,14 @@ def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer):
             # Rasterize it and place in the library, add an
             # element to the .brd output layer referencing it.
             text_font = font_list.index(text.get("font", "proportional"))
-            text_size = int(float(text.get("size")) * 66.6 + 0.5)
-
-            if text_font == 0:  # Vector
-                font = ImageFont.truetype("fonts/GNU/FreeSans.ttf", text_size)
-            elif text_font == 1:  # Proportional
-                font = ImageFont.truetype(FONT_FILE, text_size)
-            else:  # Fixed
-                font = ImageFont.truetype("fonts/GNU/FreeMono.ttf", text_size)
+            text_size = int(float(text.get("size")) * font_spec[text_font][1] + 0.5)
+            font = ImageFont.truetype(font_spec[text_font][0], text_size)
             metrics = font.getmetrics()
             box = font.getbbox(
                 text.text,
                 mode="",
                 direction=None,
-                features=FONT_FEATURES,
+                features=None,
                 language=None,
                 stroke_width=0,
                 anchor=None,
@@ -147,7 +147,7 @@ def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer):
             image = Image.new("1", (width, height), color=0)
             draw = ImageDraw.Draw(image)
             draw.text(
-                (-box[0], -box[1]), text.text, font=font, fill=1, features=FONT_FEATURES
+                (-box[0], -box[1]), text.text, font=font, fill=1, features=None
             )
             text_align = align_list.index(text.get("align", "bottom-left"))
             anchor_horiz = text_align % 3
@@ -187,7 +187,7 @@ def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer):
 # -----
 
 
-brd_tree = ET.parse("AHT20.brd")
+brd_tree = ET.parse(infile)
 brd_root = brd_tree.getroot()
 brd_layers = brd_root.findall("drawing/layers")[0]  # <layers> in .brd
 layer_list = brd_layers.findall("layer")  #           List of <layer> elements
