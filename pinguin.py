@@ -5,6 +5,7 @@ objects on specific layers, adds raster equivalents (in nicer fonts) on
 different layers, which can be merged with the normal silk output.
 """
 
+import argparse
 import os
 import xml.etree.ElementTree as ET
 from PIL import Image, ImageFont, ImageDraw
@@ -25,6 +26,22 @@ BOTTOM_IN = 173  #  Bottom labels input
 # way of specifying effects like inverted text in a box.
 
 label_num = 0
+
+# Sloppy arg parsing for now, accepts a filename for input,
+# output will be the same with _out inserted before extension.
+# Later will add stuff here for font overrides, etc.
+parser = argparse.ArgumentParser()
+parser.add_argument('filename', nargs='?', default="AHT20.brd")
+args = parser.parse_args()
+path = os.path.split(args.filename)
+idx = path[1].rfind(".brd")
+if idx < 0:
+    print("Input must be a .brd file")
+    exit(0)
+if len(path[0]):
+    outfile = path[0] + '/' + path[1][:idx] + "_out.brd"
+else:
+    outfile = path[1][:idx] + "_out.brd"
 
 
 def layer_find_add(parent, list, number, name, color):
@@ -247,7 +264,7 @@ try:
     ET.indent(brd_tree, space="  ")
 except:
     pass
-brd_tree.write("AHT20_out.brd", encoding="utf-8", xml_declaration=True)
+brd_tree.write(outfile, encoding="utf-8", xml_declaration=True)
 
 
 # ------------------------------
