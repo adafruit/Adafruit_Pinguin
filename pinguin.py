@@ -165,15 +165,16 @@ def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer):
                 direction=None,
                 features=None,
                 language=None,
+                spacing=15, # TO DO: figure out correct spacing
                 stroke_width=0
             )
             width = int(box[2] - box[0] + 1)
             height = int(box[3] - box[1] + 1)
             image = Image.new("1", (width, height), color=0)
             draw = ImageDraw.Draw(image)
-            #draw.text((-box[0], -box[1]), text.text, font=font, fill=1, features=None)
             draw.multiline_text((-box[0], -box[1]), text.text, font=font,
                 align=font_align[anchor_horiz],
+                spacing=15, # TO DO: figure out correct spacing
                 fill=1, features=None)
             if anchor_horiz == 0:
                 anchor_x = 0
@@ -182,10 +183,15 @@ def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer):
             else:
                 anchor_x = width
             # TO DO: handle vertical anchor on multi-line text.
+            extra_lines = text.text.count("\n")
             if anchor_vert == 0:
                 anchor_y = metrics[0] - box[1]
+                # Multiline kludge for now:
+                anchor_y += (metrics[1] + metrics[0]) * extra_lines * 0.5
             elif anchor_vert == 1:
                 anchor_y = (metrics[0] - box[1]) * 0.5
+                # Multiline kludge for now:
+                anchor_y += (metrics[1] + metrics[0]) * extra_lines * 0.5
             else:
                 anchor_y = 1
             # Add package in library
