@@ -29,13 +29,13 @@ label_num = 0  # Counter for labels, incremented as they're added to file
 
 parser = argparse.ArgumentParser()
 parser.add_argument("filename", nargs="?", default="AHT20.brd")
+parser.add_argument("-dpi", type=int, default=1200)
 parser.add_argument("-vfont", type=str, default="fonts/GNU/FreeSans.ttf")
 parser.add_argument("-pfont", type=str, default="fonts/Arimo/static/Arimo-Regular.ttf")
 parser.add_argument("-ffont", type=str, default="fonts/GNU/FreeMono.ttf")
 parser.add_argument("-vscale", type=float, default=4 / 3)
 parser.add_argument("-pscale", type=float, default=2 ** 0.5)
 parser.add_argument("-fscale", type=float, default=2 ** 0.5)
-parser.add_argument("-dpi", type=int, default=1200)
 args = parser.parse_args()
 infile = args.filename
 path = os.path.split(args.filename)

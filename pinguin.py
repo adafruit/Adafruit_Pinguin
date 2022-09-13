@@ -6,7 +6,8 @@ different layers; include the latter with the normal silk output when
 producing CAM files.
 
 Forgive the mess, this is hastily-written muck and not Pythonic or
-whatever; like only three people will be using it anyway.
+whatever, doesn't have error handling; like only three people will be
+using it anyway.
 """
 
 import argparse
@@ -126,7 +127,14 @@ align_list = [
     "top-right",
 ]
 font_list = ["vector", "proportional", "fixed"]
+font_align = ["left", "center", "right"]
 
+
+# Need a small nonsense image for multiline text setup.
+# Can't get multiline bounding box without a drawing context,
+# but image for text isn't declared until bounding box is known!
+ml_temp = Image.new("1", (1, 1), color=0)
+ml_draw = ImageDraw.Draw(ml_temp)
 
 def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer):
     """Process text elements in one layer of EAGLE file; convert fonts
@@ -143,40 +151,37 @@ def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer):
             text_size = int(
                 float(text.get("size")) * font_spec[text_font][1] * mm_to_px + 0.5
             )
-            # Confirmed, this doesn't work with multi-line text
-            # print(text.text.split("\n"))
-            # Will need to find bounds common to whole list,
-            # determine line spacing, etc.
-            # Oh, or there's ImageDraw.multiline_textbbox()
-            # (xy, text, font, anchor, spacing, align, direction,
-            #  features, language, stroke_width, embedded_color)
-            font = ImageFont.truetype(font_spec[text_font][0], text_size)
-            metrics = font.getmetrics()
-            box = font.getbbox(
-                text.text,
-                mode="",
-                direction=None,
-                features=None,
-                language=None,
-                stroke_width=0,
-                anchor=None,
-            )
-            width = box[2] - box[0] + 1
-            height = box[3] - box[1] + 1
-            image = Image.new("1", (width, height), color=0)
-            draw = ImageDraw.Draw(image)
-            # draw.multiline_text(xy, text, font, fill, align)
-            draw.text((-box[0], -box[1]), text.text, font=font, fill=1, features=None)
             text_align = align_list.index(text.get("align", "bottom-left"))
             anchor_horiz = text_align % 3
             anchor_vert = text_align // 3
+            font = ImageFont.truetype(font_spec[text_font][0], text_size)
+            metrics = font.getmetrics()
+            box = ml_draw.multiline_textbbox(
+                (0, 0),
+                text.text,
+                font,
+                anchor=None,
+                align=font_align[anchor_horiz],
+                direction=None,
+                features=None,
+                language=None,
+                stroke_width=0
+            )
+            width = int(box[2] - box[0] + 1)
+            height = int(box[3] - box[1] + 1)
+            image = Image.new("1", (width, height), color=0)
+            draw = ImageDraw.Draw(image)
+            #draw.text((-box[0], -box[1]), text.text, font=font, fill=1, features=None)
+            draw.multiline_text((-box[0], -box[1]), text.text, font=font,
+                align=font_align[anchor_horiz],
+                fill=1, features=None)
             if anchor_horiz == 0:
                 anchor_x = 0
             elif anchor_horiz == 1:
                 anchor_x = width / 2
             else:
                 anchor_x = width
-            # Ah! This will have problems with multi-line text.
+            # TO DO: handle vertical anchor on multi-line text.
             if anchor_vert == 0:
                 anchor_y = metrics[0] - box[1]
             elif anchor_vert == 1:
