@@ -81,11 +81,23 @@ def rectify(parent, image, anchor_x, anchor_y):
         if pixel_state > 0:
             rect(parent, start_x, image.width, row, anchor_x, anchor_y)
 
+
 # Order of this list is important, don't mess with
-align_list = [ "bottom-left", "bottom-center", "bottom-right", "center-left", "center", "center-right", "top-left", "top-center", "top-right" ]
+align_list = [
+    "bottom-left",
+    "bottom-center",
+    "bottom-right",
+    "center-left",
+    "center",
+    "center-right",
+    "top-left",
+    "top-center",
+    "top-right",
+]
 font_list = ["vector", "proportional", "fixed"]
 
-def process(in_texts, in_layer, out_elements, out_packages, out_layer):
+
+def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer):
     global label_num
     in_str = str(in_layer)
     out_str = str(out_layer)
@@ -99,7 +111,7 @@ def process(in_texts, in_layer, out_elements, out_packages, out_layer):
 
             if text_font == 0:  # Vector
                 font = ImageFont.truetype("fonts/GNU/FreeSans.ttf", text_size)
-            elif text_font == 1: # Proportional
+            elif text_font == 1:  # Proportional
                 font = ImageFont.truetype(FONT_FILE, text_size)
             else:  # Fixed
                 font = ImageFont.truetype("fonts/GNU/FreeMono.ttf", text_size)
@@ -211,32 +223,31 @@ brd_layers[:] = sorted(brd_layers, key=lambda child: int(child.get("number")))
 
 brd_elements = brd_root.findall("drawing/board/elements")[0]  # <elements> in .brd
 brd_plain = brd_root.findall("drawing/board/plain")[0]
-# texts = brd_root.findall("drawing/board/plain/text")
-brd_texts = brd_plain.findall("text")
+brd_texts = brd_root.findall("drawing/board/plain/text")
+# brd_texts = brd_plain.findall("text")
 # Need to do some check-if-exist stuff here
 brd_libraries = brd_root.findall("drawing/board/libraries")[0]  # <libraries> in .brd
-brd_library_list = brd_libraries.findall(
-    "library"
-)  #            List of <library> items
-for lib in brd_library_list:  #                                   Iterate through list
-    if lib.get("name") == "pinguin":  #                           If pinguin library
-        brd_libraries.remove(
-            lib
-        )  #                              Delete it, we'll make a new one
-
+brd_library_list = brd_libraries.findall("library")  # List of <library> items
+for lib in brd_library_list:  #                        Iterate through list
+    if lib.get("name") == "pinguin":  #                If pinguin library,
+        brd_libraries.remove(lib)  #                   delete it, we'll make a new one
 brd_library = ET.SubElement(brd_libraries, "library", name="pinguin")
 brd_packages = ET.SubElement(brd_library, "packages")
 
-process(brd_texts, TOP_IN, brd_elements, brd_packages, TOP_OUT)
-process(brd_texts, BOTTOM_IN, brd_elements, brd_packages, BOTTOM_OUT)
+process_layer(brd_texts, TOP_IN, brd_elements, brd_packages, TOP_OUT)
+process_layer(brd_texts, BOTTOM_IN, brd_elements, brd_packages, BOTTOM_OUT)
 
-# Unfortunately indent() is only avail in Python 3.9; we're on 3.7
-# ET.indent(tree, space=" ")
-# That means the resulting XML will all be packed into one long line.
-brd_tree.write("AHT20_out.brd.tmp", encoding="utf-8", xml_declaration=True)
-# So, instead of indent(), reformat to legible XML using command line tool...
-os.system("xmllint --format - < AHT20_out.brd.tmp > AHT20_out.brd")
-os.remove("AHT20_out.brd.tmp")
+# ElementTree by default doesn't indent XML. There's an option in Python >= 3.9
+# to do this, but it's not present in older versions (e.g. macOS at the moment).
+# This is a "nice to have" during development & testing but is not crucial...so
+# we try/except and just pass if it's a problem, no worries. xmllint, if
+# available, can be invoked manually after the fact:
+#     xmllint --format - <infile >outfile
+try:
+    ET.indent(brd_tree, space="  ")
+except:
+    pass
+brd_tree.write("AHT20_out.brd", encoding="utf-8", xml_declaration=True)
 
 
 # ------------------------------
