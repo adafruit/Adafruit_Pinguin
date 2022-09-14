@@ -58,6 +58,7 @@ px_to_mm = 25.4 / args.dpi  # For scaling pixels back to document
 
 # SOME FUNCTIONS TO DO SOME THINGS -----------------------------------------
 
+
 def layer_find_add(parent, list, number, name, color):
     """Search EAGLE tree for layer by number.
     If present, return it. If not, create new layer and return that.
@@ -93,7 +94,7 @@ def rect(parent, layer, x1, x2, y, ax=0, ay=0):
         y1="%3.2f" % -y,
         x2="%3.2f" % x2,
         y2="%3.2f" % -y2,
-        layer=layer
+        layer=layer,
     )
 
 
@@ -112,6 +113,7 @@ def rectify(parent, layer, image, anchor_x, anchor_y):
                     rect(parent, layer, start_x, column, row, anchor_x, anchor_y)
         if pixel_state > 0:
             rect(parent, layer, start_x, image.width, row, anchor_x, anchor_y)
+
 
 # Order of these lists is important, don't mess with (value returned by
 # index() is used for subsequent operations).
@@ -135,6 +137,7 @@ font_align = ["left", "center", "right"]
 # but image for text isn't declared until bounding box is known!
 ml_temp = Image.new("1", (1, 1), color=0)
 ml_draw = ImageDraw.Draw(ml_temp)
+
 
 def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer):
     """Process text elements in one layer of EAGLE file; convert fonts
@@ -165,34 +168,39 @@ def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer):
                 direction=None,
                 features=None,
                 language=None,
-                spacing=15, # TO DO: figure out correct spacing
-                stroke_width=0
+                spacing=15,  # TO DO: figure out correct spacing
+                stroke_width=0,
             )
             width = int(box[2] - box[0] + 1)
             height = int(box[3] - box[1] + 1)
             image = Image.new("1", (width, height), color=0)
             draw = ImageDraw.Draw(image)
-            draw.multiline_text((-box[0], -box[1]), text.text, font=font,
+            draw.multiline_text(
+                (-box[0], -box[1]),
+                text.text,
+                font=font,
                 align=font_align[anchor_horiz],
-                spacing=15, # TO DO: figure out correct spacing
-                fill=1, features=None)
-            if anchor_horiz == 0:
+                spacing=15,  # TO DO: figure out correct spacing
+                fill=1,
+                features=None,
+            )
+            if anchor_horiz == 0:  # Left
                 anchor_x = 0
-            elif anchor_horiz == 1:
+            elif anchor_horiz == 1:  # Center
                 anchor_x = width / 2
-            else:
+            else:  # Right
                 anchor_x = width
             # TO DO: handle vertical anchor on multi-line text.
             extra_lines = text.text.count("\n")
-            if anchor_vert == 0:
+            if anchor_vert == 0:  # Bottom
                 anchor_y = metrics[0] - box[1]
                 # Multiline kludge for now:
-                anchor_y += (metrics[1] + metrics[0]) * extra_lines * 0.5
-            elif anchor_vert == 1:
+                anchor_y += (metrics[1] + metrics[0]) * extra_lines
+            elif anchor_vert == 1:  # Center
                 anchor_y = (metrics[0] - box[1]) * 0.5
                 # Multiline kludge for now:
                 anchor_y += (metrics[1] + metrics[0]) * extra_lines * 0.5
-            else:
+            else:  # Top
                 anchor_y = 1
             # Add package in library
             name = "pLabel" + str(label_num)
