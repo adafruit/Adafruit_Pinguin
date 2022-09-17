@@ -140,7 +140,9 @@ ml_temp = Image.new("1", (1, 1), color=0)
 ml_draw = ImageDraw.Draw(ml_temp)
 
 
-def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer, backup_layer):
+def process_layer(
+    in_texts, in_layer, out_elements, out_packages, out_layer, backup_layer
+):
     """Process text elements in one layer of EAGLE file; convert fonts
     to raster library elements."""
     global label_num  # Icky, sorry
@@ -210,6 +212,12 @@ def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer, bac
             rectify(package, out_str, image, anchor_x, anchor_y)
             # Add element in .brd (referencing lbr package)
             rot = text.get("rot", "R0")
+            if not "S" in rot:
+                # If 'spin' isn't selected, can't handle angles >= 180
+                table = {77: None, 82: None, 83: None}  # Strip M, R, S
+                rot = ("MR" if "M" in rot else "R") + str(
+                    float(rot.translate(table)) % 180
+                )
             ET.SubElement(
                 out_elements,
                 "element",
@@ -234,10 +242,14 @@ layer_list = brd_layers.findall("layer")  #           List of <layer> elements
 
 top_in = layer_find_add(brd_layers, layer_list, TOP_IN, "tPlace", 14)
 top_out = layer_find_add(brd_layers, layer_list, TOP_OUT, "Pinguin_tPlace", 14)
-top_backup = layer_find_add(brd_layers, layer_list, TOP_BACKUP, "Pinguin_tBackup", 14, False)
+top_backup = layer_find_add(
+    brd_layers, layer_list, TOP_BACKUP, "Pinguin_tBackup", 14, False
+)
 bottom_in = layer_find_add(brd_layers, layer_list, BOTTOM_IN, "bPlace", 13)
 bottom_out = layer_find_add(brd_layers, layer_list, BOTTOM_OUT, "Pinguin_bPlace", 13)
-bottom_backup = layer_find_add(brd_layers, layer_list, BOTTOM_BACKUP, "Pinguin_bBackup", 13, False)
+bottom_backup = layer_find_add(
+    brd_layers, layer_list, BOTTOM_BACKUP, "Pinguin_bBackup", 13, False
+)
 
 # Sort .brd layers list so Pinguin-added items aren't at end in EAGLE menu
 brd_layers[:] = sorted(brd_layers, key=lambda child: int(child.get("number")))
@@ -259,7 +271,9 @@ if not brd_library:  # Not found, add pinguin library...
 brd_packages = ET.SubElement(brd_library, "packages")
 
 process_layer(brd_texts, TOP_IN, brd_elements, brd_packages, TOP_OUT, TOP_BACKUP)
-process_layer(brd_texts, BOTTOM_IN, brd_elements, brd_packages, BOTTOM_OUT, BOTTOM_BACKUP)
+process_layer(
+    brd_texts, BOTTOM_IN, brd_elements, brd_packages, BOTTOM_OUT, BOTTOM_BACKUP
+)
 
 # WRITE RESULTS ------------------------------------------------------------
 
