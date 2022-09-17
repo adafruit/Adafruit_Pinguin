@@ -17,12 +17,13 @@ from PIL import Image, ImageFont, ImageDraw
 
 # GLOBAL CONFIGURABLES -----------------------------------------------------
 
-TOP_OUT = 170  #    Top silk output layer (will be added if not present)
-BOTTOM_OUT = 171  # Bottom silk output layer "
-TOP_IN = 172  #     Top labels input layer "
-BOTTOM_IN = 173  #  Bottom labels input layer "
-# Additional "IN" layers might get added here later as a cheap
-# way of specifying effects like inverted text in a box.
+TOP_IN = 21  #         Top labels input layer
+BOTTOM_IN = 22  #      Bottom labels input layer
+TOP_OUT = 170  #       Top silk output layer (will be added if not present)
+BOTTOM_OUT = 171  #    Bottom silk output layer (")
+TOP_BACKUP = 172  #    Top labels backup layer (")
+BOTTOM_BACKUP = 173  # Bottom labels backup layer (")
+
 
 label_num = 0  # Counter for labels, incremented as they're added to file
 
@@ -59,7 +60,7 @@ px_to_mm = 25.4 / args.dpi  # For scaling pixels back to document
 # SOME FUNCTIONS TO DO SOME THINGS -----------------------------------------
 
 
-def layer_find_add(parent, list, number, name, color):
+def layer_find_add(parent, list, number, name, color, visible=True):
     """Search EAGLE tree for layer by number.
     If present, return it. If not, create new layer and return that.
     """
@@ -75,7 +76,7 @@ def layer_find_add(parent, list, number, name, color):
         name=name,
         color=str(color),
         fill="1",
-        visible="yes",
+        visible="yes" if visible else "no",
         active="yes",
     )
 
@@ -139,12 +140,13 @@ ml_temp = Image.new("1", (1, 1), color=0)
 ml_draw = ImageDraw.Draw(ml_temp)
 
 
-def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer):
+def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer, backup_layer):
     """Process text elements in one layer of EAGLE file; convert fonts
     to raster library elements."""
     global label_num  # Icky, sorry
     in_str = str(in_layer)
     out_str = str(out_layer)
+    backup_str = str(backup_layer)
     for text in in_texts:
         if text.get("layer") == in_str:
             # Found a text object on the input layer
@@ -220,6 +222,7 @@ def process_layer(in_texts, in_layer, out_elements, out_packages, out_layer):
                 rot=rot,
             )
             label_num += 1
+            text.set("layer", backup_str)  # Move from in_layer to backup_layer
 
 
 # DO THE THING -------------------------------------------------------------
@@ -229,37 +232,12 @@ brd_root = brd_tree.getroot()
 brd_layers = brd_root.findall("drawing/layers")[0]  # <layers> in .brd
 layer_list = brd_layers.findall("layer")  #           List of <layer> elements
 
-# If Pinguin_tPlace and/or Pinguin_bPlace layers are present in .brd,
-# delete them (we'll make new ones in a moment). It's easier than
-# conditionally adding them and iterating through to delete contents.
-layer_names = [str(TOP_OUT), str(BOTTOM_OUT)]
-for layer in layer_list:
-    if layer.get("number") in layer_names:
-        brd_layers.remove(layer)
-
-top_out = ET.SubElement(
-    brd_layers,
-    "layer",
-    number=str(TOP_OUT),
-    name="Pinguin_tPlace",
-    color=str(14),
-    fill="1",
-    visible="yes",
-    active="yes",
-)
-bottom_out = ET.SubElement(
-    brd_layers,
-    "layer",
-    number=str(BOTTOM_OUT),
-    name="Pinguin_bPlace",
-    color=str(13),
-    fill="1",
-    visible="yes",
-    active="yes",
-)
-
-top_in = layer_find_add(brd_layers, layer_list, TOP_IN, "Pinguin_tIn", 10)
-bottom_in = layer_find_add(brd_layers, layer_list, BOTTOM_IN, "Pinguin_bIn", 1)
+top_in = layer_find_add(brd_layers, layer_list, TOP_IN, "tPlace", 14)
+top_out = layer_find_add(brd_layers, layer_list, TOP_OUT, "Pinguin_tPlace", 14)
+top_backup = layer_find_add(brd_layers, layer_list, TOP_BACKUP, "Pinguin_tBackup", 14, False)
+bottom_in = layer_find_add(brd_layers, layer_list, BOTTOM_IN, "bPlace", 13)
+bottom_out = layer_find_add(brd_layers, layer_list, BOTTOM_OUT, "Pinguin_bPlace", 13)
+bottom_backup = layer_find_add(brd_layers, layer_list, BOTTOM_BACKUP, "Pinguin_bBackup", 13, False)
 
 # Sort .brd layers list so Pinguin-added items aren't at end in EAGLE menu
 brd_layers[:] = sorted(brd_layers, key=lambda child: int(child.get("number")))
@@ -268,17 +246,20 @@ brd_layers[:] = sorted(brd_layers, key=lambda child: int(child.get("number")))
 brd_elements = brd_root.findall("drawing/board/elements")[0]  # <elements> in .brd
 brd_plain = brd_root.findall("drawing/board/plain")[0]
 brd_texts = brd_root.findall("drawing/board/plain/text")
-# Need to do some check-if-exist stuff here
+
+# Check if pinguin library exists in the brd file
+brd_library = None  # Assume it's not there to start
 brd_libraries = brd_root.findall("drawing/board/libraries")[0]  # <libraries> in .brd
 brd_library_list = brd_libraries.findall("library")  # List of <library> items
-for lib in brd_library_list:  #                        Iterate through list
-    if lib.get("name") == "pinguin":  #                If pinguin library,
-        brd_libraries.remove(lib)  #                   delete it, we'll make a new one
-brd_library = ET.SubElement(brd_libraries, "library", name="pinguin")
+for lib in brd_library_list:  #         Iterate through list
+    if lib.get("name") == "pinguin":  # If pinguin library,
+        brd_library = lib  #            Found it!
+if not brd_library:  # Not found, add pinguin library...
+    brd_library = ET.SubElement(brd_libraries, "library", name="pinguin")
 brd_packages = ET.SubElement(brd_library, "packages")
 
-process_layer(brd_texts, TOP_IN, brd_elements, brd_packages, TOP_OUT)
-process_layer(brd_texts, BOTTOM_IN, brd_elements, brd_packages, BOTTOM_OUT)
+process_layer(brd_texts, TOP_IN, brd_elements, brd_packages, TOP_OUT, TOP_BACKUP)
+process_layer(brd_texts, BOTTOM_IN, brd_elements, brd_packages, BOTTOM_OUT, BOTTOM_BACKUP)
 
 # WRITE RESULTS ------------------------------------------------------------
 
