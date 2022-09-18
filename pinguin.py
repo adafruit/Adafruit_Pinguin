@@ -150,6 +150,8 @@ def process_layer(
     out_str = str(out_layer)
     backup_str = str(backup_layer)
     for text in in_texts:
+        if text.text is None:
+            continue
         if text.get("layer") == in_str:
             # Found a text object on the input layer
             # Rasterize it and place in the library, add an
