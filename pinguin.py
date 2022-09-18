@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2022 P Burgess for Adafruit Industries
+# SPDX-License-Identifier: MIT
+
 """
 Adafruit Pinguin -- an EAGLE silkscreen label generator for nicer fonts
 with minimal intervention. Reads an EAGLE .brd file, looking for text
