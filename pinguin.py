@@ -269,6 +269,15 @@ brd_library_list = brd_libraries.findall("library")  # List of <library> items
 for lib in brd_library_list:  #         Iterate through list
     if lib.get("name") == "pinguin":  # If pinguin library,
         brd_library = lib  #            Found it!
+        # If board has been through Pinguin before, look in the library for
+        # packages with names starting with "pLabel" -- those are likely
+        # prior Pinguin output. If any new items get added to this board,
+        # start at the next available index, not at 0.
+        packages = lib[0].findall("package")
+        for package in packages:
+            name = package.get("name")
+            if name.startswith("pLabel"):
+                label_num = max(label_num, int(name[6:]) + 1)
 if not brd_library:  # Not found, add pinguin library...
     brd_library = ET.SubElement(brd_libraries, "library", name="pinguin")
 brd_packages = ET.SubElement(brd_library, "packages")
