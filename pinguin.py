@@ -39,8 +39,8 @@ parser.add_argument("-vfont", type=str, default="fonts/GNU/FreeSans.ttf")
 parser.add_argument("-pfont", type=str, default="fonts/Arimo/static/Arimo-Regular.ttf")
 parser.add_argument("-ffont", type=str, default="fonts/GNU/FreeMono.ttf")
 parser.add_argument("-vscale", type=float, default=4 / 3)
-parser.add_argument("-pscale", type=float, default=2 ** 0.5)
-parser.add_argument("-fscale", type=float, default=2 ** 0.5)
+parser.add_argument("-pscale", type=float, default=2**0.5)
+parser.add_argument("-fscale", type=float, default=2**0.5)
 args = parser.parse_args()
 infile = args.filename
 path = os.path.split(args.filename)
@@ -84,13 +84,14 @@ def layer_find_add(parent, list, number, name, color, visible=True):
     )
 
 
-def rect(parent, layer, x1, x2, y, ax=0, ay=0):
-    """Append a single-row rectangle to XML doc. Input units are pixels
-    relative to anchor point (ax, ay), output is mm."""
-    x1 = (x1 - ax) * px_to_mm
-    x2 = (x2 - ax) * px_to_mm
-    y2 = (y + 1 - ay) * px_to_mm
-    y = (y - ay) * px_to_mm
+def rect(parent, layer, x1, x2, y, ax=0, ay=0, scale=px_to_mm):
+    """Append a single-row rectangle to XML doc. Unless specified otherwise
+    via the scale argument, Input units are pixels relative to anchor point
+    (ax, ay), output is mm."""
+    x1 = (x1 - ax) * scale
+    x2 = (x2 - ax) * scale
+    y2 = (y + 1 - ay) * scale
+    y = (y - ay) * scale
     child = ET.SubElement(
         parent,
         "rectangle",
@@ -102,21 +103,21 @@ def rect(parent, layer, x1, x2, y, ax=0, ay=0):
     )
 
 
-def rectify(parent, layer, image, anchor_x, anchor_y):
+def rectify(parent, layer, image, anchor_x, anchor_y, scale=px_to_mm):
     """Convert a PIL image to a series of single-row rectangles."""
     for row in range(image.height):
-        pixel_state = 0  # Presume 'off' pixels to start
         start_x = 0
-        for column in range(image.width):
+        pixel_state = image.getpixel((0, row))
+        for column in range(1, image.width):
             pixel = image.getpixel((column, row))
             if pixel != pixel_state:
                 pixel_state = pixel
                 if pixel_state > 0:
                     start_x = column
                 else:
-                    rect(parent, layer, start_x, column, row, anchor_x, anchor_y)
+                    rect(parent, layer, start_x, column, row, anchor_x, anchor_y, scale)
         if pixel_state > 0:
-            rect(parent, layer, start_x, image.width, row, anchor_x, anchor_y)
+            rect(parent, layer, start_x, image.width, row, anchor_x, anchor_y, scale)
 
 
 # Order of these lists is important, don't mess with (value returned by
@@ -144,10 +145,11 @@ ml_draw = ImageDraw.Draw(ml_temp)
 
 
 def process_layer(
-    in_texts, in_layer, out_elements, out_packages, out_layer, backup_layer
+    in_texts, in_rects, in_layer, out_elements, out_packages, out_layer, backup_layer
 ):
-    """Process text elements in one layer of EAGLE file; convert fonts
-    to raster library elements."""
+    """Process text and rectangle elements in one layer of EAGLE file;
+    convert fonts to raster library elements, and similarly with certain
+    rectangles based on group assignments."""
     global label_num  # Icky, sorry
     in_str = str(in_layer)
     out_str = str(out_layer)
@@ -235,6 +237,81 @@ def process_layer(
             label_num += 1
             text.set("layer", backup_str)  # Move from in_layer to backup_layer
 
+    # Each rect to be converted should be assigned to a group named after the
+    # symbol image filename. Must be all caps because that's how EAGLE works.
+    # Subdirectories of "symbols" CAN be referenced (use forward slash) but
+    # absolute paths are NOT supported. e.g. Assign a rect to group
+    # "DRAGON.BMP" to have it replaced with that image. 1-bit BMP and PNG are
+    # supported, white pixel = silk, black = clear. Rotation and mirroring are
+    # also handled but of course that's hard to distinguish in EAGLE. Complex
+    # images may look junky in the EAGLE work window but should clear up when
+    # generating gerbers, etc.
+    for rect in in_rects:
+        if rect.get("layer") == in_str:
+            groups = rect.get("grouprefs")
+            if groups:
+                for group in groups.split():
+                    if group.endswith(".BMP") or group.endswith(".PNG"):
+                        try:
+                            with Image.open("symbols/" + group) as image:
+                                image = image.convert("1")
+                                x1, y1, x2, y2 = (
+                                    float(rect.get("x1")),
+                                    float(rect.get("y1")),
+                                    float(rect.get("x2")),
+                                    float(rect.get("y2")),
+                                )
+                                name = "pLabel" + str(label_num)
+                                package = ET.SubElement(
+                                    out_packages, "package", name=name
+                                )
+                                if float(image.width) / float(image.height) > (
+                                    x2 - x1
+                                ) / (y2 - y1):
+                                    # Image is wider than rect; letterbox it
+                                    scale = (x2 - x1) / image.width
+                                else:
+                                    # Image is narroer than rect; pillarbox it
+                                    scale = (y2 - y1) / image.height
+                                anchor_x = image.width / 2
+                                anchor_y = image.height / 2
+                                rectify(
+                                    package, out_str, image, anchor_x, anchor_y, scale
+                                )
+                                # There's some repetition here between the
+                                # text and rect cases...can probably make a
+                                # function to handle either/or. But for now...
+                                rot = rect.get("rot", "R0")
+                                if not "S" in rot:
+                                    table = {
+                                        77: None,
+                                        82: None,
+                                        83: None,
+                                    }  # Strip M, R, S
+                                    rot = ("MR" if "M" in rot else "R") + str(
+                                        float(rot.translate(table)) % 180
+                                    )
+                                # If bottom layer, add "M" to rot so symbol
+                                # bitmap gets correctly flipped.
+                                if in_layer == BOTTOM_IN and not "M" in rot:
+                                    rot = "M" + rot
+                                ET.SubElement(
+                                    out_elements,
+                                    "element",
+                                    name=name,
+                                    library="pinguin",
+                                    package=name,
+                                    x=str((x1 + x2) / 2),
+                                    y=str((y1 + y2) / 2),
+                                    smashed="yes",
+                                    rot=rot,
+                                )
+                                label_num += 1
+                                rect.set("layer", backup_str)  # Backup orig
+                        except FileNotFoundError:
+                            # Not fatal; warn user and continue
+                            print("Image", group, "not found")
+
 
 # DO THE THING -------------------------------------------------------------
 
@@ -257,10 +334,11 @@ bottom_backup = layer_find_add(
 # Sort .brd layers list so Pinguin-added items aren't at end in EAGLE menu
 brd_layers[:] = sorted(brd_layers, key=lambda child: int(child.get("number")))
 
-# Get list of text objects in the .brd file
+# Get lists of text and rectangle objects in the .brd file ("plain" section)
 brd_elements = brd_root.findall("drawing/board/elements")[0]  # <elements> in .brd
 brd_plain = brd_root.findall("drawing/board/plain")[0]
 brd_texts = brd_root.findall("drawing/board/plain/text")
+brd_rects = brd_root.findall("drawing/board/plain/rectangle")
 
 # Check if pinguin library exists in the brd file
 brd_library = None  # Assume it's not there to start
@@ -282,9 +360,17 @@ if not brd_library:  # Not found, add pinguin library...
     brd_library = ET.SubElement(brd_libraries, "library", name="pinguin")
 brd_packages = ET.SubElement(brd_library, "packages")
 
-process_layer(brd_texts, TOP_IN, brd_elements, brd_packages, TOP_OUT, TOP_BACKUP)
 process_layer(
-    brd_texts, BOTTOM_IN, brd_elements, brd_packages, BOTTOM_OUT, BOTTOM_BACKUP
+    brd_texts, brd_rects, TOP_IN, brd_elements, brd_packages, TOP_OUT, TOP_BACKUP
+)
+process_layer(
+    brd_texts,
+    brd_rects,
+    BOTTOM_IN,
+    brd_elements,
+    brd_packages,
+    BOTTOM_OUT,
+    BOTTOM_BACKUP,
 )
 
 # WRITE RESULTS ------------------------------------------------------------
