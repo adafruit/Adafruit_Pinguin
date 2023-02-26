@@ -54,6 +54,12 @@ Optional args:
 
 `-fscale N` Change relative scale of 'fixed' font (default = 1.41)
 
+Rectangles in the tPlace (21) and bPlace (22) layers, when assigned a group
+name matching an image filename in the `symbols` subdirectory, are replaced
+by that bitmap (original rects are likewise preserved in 172/173). EAGLE
+group names (and thus symbol filenames) MUST be all-caps, e.g. "DRAGON.PNG".
+
+
 ### To Do
 
 - Multi-line text kinda works but spacing might need work.
