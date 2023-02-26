@@ -278,7 +278,7 @@ for lib in brd_library_list:  #         Iterate through list
         packages = lib[0].findall("package")
         for package in packages:
             name = package.get("name")
-            if name.startswith("pLabel"):
+            if name.startswith("pLabel") or name.startswith("PLABEL"):
                 label_num = max(label_num, int(name[6:]) + 1)
 if not brd_library:  # Not found, add pinguin library...
     brd_library = ET.SubElement(brd_libraries, "library", name="pinguin")
